@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS CloudFormation template for S3 bucket with versioning, lifecycle policy, and static website hosting'
+
+Parameters:
+  BucketNamePrefix:
+    Type: String
+    Description: Prefix for the S3 bucket name (will be made globally unique)
+    Default: aws-interview-s3
+  Environment:
+    Type: String
+    Description: Environment identifier
+    Default: dev
+    AllowedValues: [dev, test, prod]
+  RetentionDays:
+    Type: Number
+    Description: Number of days before transitioning to Glacier
+    Default: 30
+    MinValue: 1
+    MaxValue: 3650
+
+Resources:
+  InterviewS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${BucketNamePrefix}-${Environment}-${AWS::AccountId}-${AWS::Region}"
+      AccessControl: Private
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Filter: {}
+            Transitions:
+              - TransitionInDays: !Ref RetentionDays
+                StorageClass: GLACIER
+            ExpirationInDays: 365
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref InterviewS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub "${InterviewS3Bucket.Arn}/*"
+            Condition:
+                Bool:
+                  aws:SecureTransport: 'true'
+
+Outputs:
+  BucketName:
+    Description: Name of the created S3 bucket
+    Value: !Ref InterviewS3Bucket
+  BucketArn:
+    Description: ARN of the S3 bucket
+    Value: !GetAtt InterviewS3Bucket.Arn
+  WebsiteURL:
+    Description: URL for the static website hosted on S3
+    Value: !GetAtt InterviewS3Bucket.WebsiteURL
+  BucketDomainName:
+    Description: Domain name of the S3 bucket
+    Value: !GetAtt InterviewS3Bucket.DomainName
